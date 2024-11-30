@@ -58,6 +58,26 @@ fn build_message(messages: &mut Vec<(String, Color)>) -> Result<()> {
     let mut cfg: Contestant =
         serde_json::from_reader(cfg_file).map_err(CSPError::ConfigCannotParse)?;
 
+    for file in cfg.md5_check.iter() {
+        let real_hash = result_into_ok_or_err(try_crc32(&file.name));
+        let expected_hash = &file.md5;
+
+        if real_hash != *expected_hash {
+            messages.push((
+                format!(
+                    "文件 {} 校验值不匹配: found {}, expected {}.",
+                    &file.name, real_hash, expected_hash
+                ),
+                Color::Red,
+            ));
+        } else {
+            messages.push((
+                format!("文件 {} 校验通过: {}.", &file.name, expected_hash),
+                Color::Green,
+            ));
+        }
+    }
+
     let mut valid_folders = Vec::new();
 
     for dir in read_dir(&cfg.root_path).map_err(CSPError::RootDirAccessFail)? {

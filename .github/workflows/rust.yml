@@ -20,19 +20,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - name: Cache
-        uses: actions/cache@v3
-        with:
-          path: target
-          key: ${{ runner.os }}-target
+
       - name: Install vcpkg
         run: cargo install cargo-vcpkg
+
       - name: Install Linux dependencies
         run: |
           sudo apt-get install -y libx11-dev libxft-dev libxext-dev
           sudo apt-get install -y libwayland-dev libxkbcommon-dev libegl1-mesa-dev
           sudo apt-get install -y libibus-1.0-dev
         if: runner.os == 'Linux'
+
       - name: Build (Unix)
         run: |
           cargo vcpkg --verbose build
@@ -40,15 +38,18 @@ jobs:
         env:
           VCPKG_ROOT: ${{ github.workspace }}/target/vcpkg
         if: runner.os != 'Windows'
+
       - name: Build (Windows)
         run: |
+          cargo vcpkg install sdl2:x86-windows-static
           cargo vcpkg --verbose build --target i686-pc-windows-msvc
           cargo build --verbose --release --target i686-pc-windows-msvc
         env:
           VCPKG_ROOT: ${{ github.workspace }}\target\vcpkg
         if: runner.os == 'Windows'
+
       - name: Upload Binary
-        uses: actions/upload-artifact@v3.1.0
+        uses: actions/upload-artifact@v4
         with:
           name: checker-${{ matrix.os }}
           path: |-
