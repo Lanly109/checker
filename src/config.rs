@@ -15,6 +15,12 @@ pub struct Problem {
     pub existing_files: Vec<FileEntry>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Md5Check {
+    pub name: String,
+    pub md5: String,
+}
+
 #[derive(Debug)]
 pub struct FileEntry {
     pub path: PathBuf,
@@ -33,6 +39,8 @@ impl FileEntry {
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Contestant {
+    /// 需要检查的文件
+    pub md5_check: Vec<Md5Check>,
     /// 选手文件夹父路径
     pub root_path: String,
     #[serde(with = "regex_sd")]
