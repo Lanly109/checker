@@ -53,6 +53,11 @@ pub struct Contestant {
     pub end_time: DateTime<Utc>,
     /// 文件大小限制
     pub size_limit_kb: u64,
+    /// 题目正则表达式
+    #[serde(with = "regex_sd")]
+    pub problem_regex: Regex,
+    /// 题目匹配规则
+    pub problem_extern: bool,
 }
 
 mod regex_sd {

@@ -5,7 +5,8 @@ mod render;
 
 use anyhow::Result;
 use chrono::{DateTime, FixedOffset, Utc};
-use config::{Contestant, FileEntry};
+use config::{Contestant, FileEntry, Problem};
+use regex::Regex;
 use std::fs::{read_dir, File};
 use std::io::Read;
 use std::path::Path;
@@ -40,6 +41,14 @@ pub enum CSPError {
     MultipleContestantDir(String),
     #[error("无法解析 CSV 文件")]
     FailedToLoadCsv,
+    #[error("无法解析 BIN 文件")]
+    FailedToLoadBin,
+    #[error("无法解析 Problem 文件")]
+    FailedToLoadExternProblem,
+    #[error("找不到 .txt 文件")]
+    NoTxtFile,
+    #[error("找到多个 .txt 文件")]
+    MultipleTxtFiles,
     #[error("程序内部错误，请联系监考员.\n({0})")]
     Unknown(
         #[from]
@@ -108,13 +117,116 @@ fn build_message(messages: &mut Vec<(String, Color)>) -> Result<()> {
         .to_str()
         .unwrap();
 
+    // 获取 user_directory 下所有 .txt 文件名
+    let mut txt_files = Vec::new();
+    for entry in read_dir(&user_directory)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("txt") {
+            if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                txt_files.push(filename.to_string());
+            }
+        }
+    }
+    
+    // 检查 .txt 文件数量并给出提示
+    if txt_files.is_empty() {
+        messages.push((CSPError::NoTxtFile.to_string(), Color::Red));
+    } else if txt_files.len() > 1 {
+        messages.push((CSPError::MultipleTxtFiles.to_string(), Color::Red));
+    }
+    
+    let student_name = txt_files
+        .into_iter()
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(".txt")
+        .to_string();
+
+    let concate_id_name = format!("{} {}", student_id_found, student_name);
+
     messages.push((
         format!(
-            "找到选手目录： {}, 请确认是否与准考证号一致.",
-            student_id_found
+            "找到选手目录： 「{}」",
+            concate_id_name
         ),
         Color::Yellow,
     ));
+
+    let validate_bin_path = if let Some(d) = std::env::args().nth(1) {
+        std::path::Path::new(&d).join("validate.bin")
+    } else {
+        std::path::Path::new("validate.bin").to_path_buf()
+    };
+    
+    if validate_bin_path.exists() {
+        let mut validate_bin_file = File::open(&validate_bin_path)
+            .map_err(|_| CSPError::FailedToLoadBin)?;
+        let mut validate_bin_content = Vec::new();
+        validate_bin_file
+            .read_to_end(&mut validate_bin_content)
+            .map_err(|_| CSPError::FailedToLoadBin)?;
+        
+        // 计算 concate_id_name 的 md5
+        let concate_id_name_md5 = format!("{:x}", md5::compute(concate_id_name.as_bytes()));
+
+        // messages.push((
+        //     format!("选手信息 MD5: {}", concate_id_name_md5),
+        //     Color::Black,
+        // ));
+        
+        // 将 validate.bin 内容按行解析，检查 md5 是否存在
+        let validate_content = String::from_utf8_lossy(&validate_bin_content);
+        let validate_hashes: Vec<&str> = validate_content
+            .lines()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .collect();
+        
+        if validate_hashes.contains(&concate_id_name_md5.as_str()) {
+            messages.push((
+                format!("准考证号与姓名匹配通过"),
+                Color::Green
+            ));
+        } else {
+            messages.push((
+                format!("准考证号与姓名匹配失败({})，请检查输入是否正确", concate_id_name_md5),
+                Color::Red
+            ));
+        }
+    }
+    
+    if cfg.problem_extern {
+        let problem_extern_path = "problem.extern";
+        let mut problem_extern_file = File::open(&problem_extern_path)
+            .map_err(|_| CSPError::FailedToLoadExternProblem)?;
+        let mut problem_extern_content = String::new();
+        problem_extern_file
+            .read_to_string(&mut problem_extern_content)
+            .map_err(|_| CSPError::FailedToLoadExternProblem)?;
+        let extern_problems: Vec<String> = problem_extern_content
+            .lines()
+            .map(|line| line.trim().to_string())
+            .filter(|line| !line.is_empty())
+            .collect();
+        
+        cfg.problems = extern_problems
+            .into_iter()
+            .map(|name| {
+                let regex_pattern = cfg.problem_regex.to_string().replace("{0}", &name);
+                // messages.push((
+                //     format!("加载外部题目: {} 使用正则 {}", name, regex_pattern),
+                //     Color::Black,
+                // ));
+                let regex = Regex::new(&regex_pattern).unwrap_or_else(|_| cfg.problem_regex.clone());
+                Problem {
+                    name,
+                    regex,
+                    existing_files: Vec::new(),
+                }
+            })
+            .collect();
+    }
 
     for dir1 in read_dir(&user_directory)? {
         let dir1 = dir1?;
@@ -185,6 +297,13 @@ fn build_message(messages: &mut Vec<(String, Color)>) -> Result<()> {
             }
         }
     }
+
+    let problem_names = cfg.problems.iter()
+        .map(|p| p.name.as_str())
+        .collect::<Vec<_>>()
+        .join(",");
+    let problem_names_md5 = format!("{:x}", md5::compute(problem_names.as_bytes()));
+    messages.push((format!("题目列表 MD5: {}\n", problem_names_md5), Color::Yellow));
 
     if let Ok(f) = if let Some(d) = std::env::args().nth(1) {
         File::open(Path::new(&d).join("checker.hash.csv"))
