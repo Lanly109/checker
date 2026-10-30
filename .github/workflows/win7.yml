@@ -35,6 +35,17 @@ jobs:
           ref: d5ec528843d29e3a52d745a64b469f810b2cedbf
           path: target/vcpkg
 
+      # Old vcpkg's private MSYS2 snapshot references packages removed from
+      # the mirrors. Prepare a current host tool before selecting MSVC's PATH.
+      - name: Prepare host pkg-config
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          release: false
+          update: true
+          install: mingw-w64-x86_64-pkgconf
+
       - name: Select Win7-compatible C++ tools
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -56,8 +67,11 @@ jobs:
         # Step-level env takes precedence over that exported value.
         env:
           VCPKG_ROOT: ${{ github.workspace }}\target\vcpkg
+          PKG_CONFIG: ${{ steps.msys2.outputs.msys2-location }}\mingw64\bin\pkg-config.exe
         run: |
           Write-Host "Using pinned vcpkg at $env:VCPKG_ROOT"
+          & "$env:PKG_CONFIG" --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$env:VCPKG_ROOT\vcpkg.exe" install sdl2:x86-windows-win7-static sdl2-ttf:x86-windows-win7-static "--overlay-triplets=$env:GITHUB_WORKSPACE\ci\triplets"

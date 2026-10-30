@@ -25,6 +25,9 @@ git push -u origin win7
   `Cargo.toml` 一致。
 - `ci/triplets/x86-windows-win7-static.cmake` 将 SDL 等原生库和 C/C++ 运行库
   静态链接，并将原生代码的 Windows API 目标设置为 Win7。
+- CI 用 MSYS2 官方动作准备构建机的 `pkg-config`，通过 `PKG_CONFIG`
+  和 triplet 的环境变量传递设置交给 vcpkg，避免旧版私有 MSYS2 快照中的
+  包被镜像移除而导致下载 404。该工具只在构建机运行。
 
 CI 会检查 PE 架构、子系统版本、DLL 依赖，以及 `WaitOnAddress`、
 `ProcessPrng` 等已知不兼容的直接或延迟导入。
