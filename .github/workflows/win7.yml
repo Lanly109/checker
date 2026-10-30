@@ -12,7 +12,6 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  VCPKG_ROOT: ${{ github.workspace }}\target\vcpkg
   VCPKGRS_TRIPLET: x86-windows-win7-static
   # Use the v142 linker selected below, rather than auto-detecting a newer one.
   CARGO_TARGET_I686_PC_WINDOWS_MSVC_LINKER: link.exe
@@ -53,13 +52,20 @@ jobs:
           }
 
       - name: Build static SDL dependencies
+        # The developer prompt exports Visual Studio's own VCPKG_ROOT.
+        # Step-level env takes precedence over that exported value.
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}\target\vcpkg
         run: |
+          Write-Host "Using pinned vcpkg at $env:VCPKG_ROOT"
           & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$env:VCPKG_ROOT\vcpkg.exe" install sdl2:x86-windows-win7-static sdl2-ttf:x86-windows-win7-static "--overlay-triplets=$env:GITHUB_WORKSPACE\ci\triplets"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build checker
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}\target\vcpkg
         run: cargo +1.77.2 build --locked --release --target i686-pc-windows-msvc
 
       - name: Check Windows imports

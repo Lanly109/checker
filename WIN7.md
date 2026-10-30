@@ -1,6 +1,6 @@
 # Windows 7 构建
 
-本分支为 `codex/win7`，目标系统为 Windows 7 SP1。CI 生成 32 位
+本分支为 `win7`，目标系统为 Windows 7 SP1。CI 生成 32 位
 `checker.exe`，可供 Win7 32 位和 64 位系统测试使用。
 
 ## 从 GitHub Actions 下载
@@ -8,7 +8,7 @@
 推送本分支后，会自动运行 **Windows 7** 工作流：
 
 ```sh
-git push -u origin codex/win7
+git push -u origin win7
 ```
 
 构建成功后，在该次运行页面的 Artifacts 中下载 `checker-win7-x86`。
